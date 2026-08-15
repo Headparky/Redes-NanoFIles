@@ -16,7 +16,8 @@ public class NFController {
 	 * TODO: (Boletín Autómatas) Añadir más constantes que representen los estados
 	 * del autómata del cliente de directorio.
 	 */
-
+	private static final byte READY = 1; // Ping correcto
+	private static final byte SERVE_OK = 2; // Registrado como servidor en el directorio
 	/**
 	 * Shell para leer comandos de usuario de la entrada estándar
 	 */
@@ -115,6 +116,7 @@ public class NFController {
 			 * tiene, y la imprima por pantalla
 			 */
 			controllerDir.getAndPrintFileList();
+			commandSucceeded = true;
 			break;
 		case NFCommands.COM_PEERLIST:
 			/*
@@ -122,6 +124,7 @@ public class NFController {
 			 * sirviendo ficheros y la imprima por pantalla.
 			 */
 			controllerDir.getAndPrintPeerList();
+			commandSucceeded = true;
 			break;
 		case NFCommands.COM_FILELIST_PEER:
 			/*
@@ -142,24 +145,21 @@ public class NFController {
 					targetHashSubstring);
 			break;
 		case NFCommands.COM_SERVE:
-			/*
-			 * Pedir al controllerPeer que lance un servidor de ficheros. Si el servidor se
-			 * ha podido iniciar correctamente, pedir al controllerDir darnos de alta como
-			 * servidor de ficheros en el directorio, indicando el puerto en el que nuestro
-			 * servidor escucha conexiones de otros peers así como la lista de ficheros
-			 * disponibles.
-			 */
-			if (NanoFiles.testModeTCP) {
-				controllerPeer.testTCPServer();
-			} else {
-				boolean serverRunning = controllerPeer.startFileServer();
-				if (serverRunning) {
-					commandSucceeded = controllerDir.registerFileServer(controllerPeer.getServerPort());
-				} else {
-					System.err.println("Cannot start file server");
-				}
-			}
-			break;
+		    System.out.println("DEBUG: COM_SERVE ejecutándose...");
+		    if (NanoFiles.testModeTCP) {
+		        System.out.println("DEBUG: testModeTCP=true, ejecutando testTCPServer()");
+		        controllerPeer.testTCPServer();
+		    } else {
+		        System.out.println("DEBUG: testModeTCP=false, ejecutando startFileServer()");
+		        boolean serverRunning = controllerPeer.startFileServer();
+		        System.out.println("DEBUG: startFileServer() devolvió: " + serverRunning);
+		        if (serverRunning) {
+		            System.out.println("DEBUG: Llamando registerFileServer(" + controllerPeer.getServerPort() + ")");
+		            commandSucceeded = controllerDir.registerFileServer(controllerPeer.getServerPort());
+		            System.out.println("DEBUG: registerFileServer() devolvió: " + commandSucceeded);
+		        }
+		    }
+		    break;
 		case NFCommands.COM_DOWNLOAD_DIR:
 			/*
 			 * Descargar directamente un fichero pequeño servido por el directorio (carpeta
@@ -204,25 +204,97 @@ public class NFController {
 	 * usuario, en función del estado del autómata en el que nos encontramos.
 	 */
 	private boolean canProcessCommandInCurrentState() {
-		/*
-		 * TODO: (Boletín Autómatas) Para cada comando tecleado en el shell
-		 * (currentCommand), comprobar "currentState" para ver si dicho comando es
-		 * válido según el estado actual del autómata, ya que no todos los comandos
-		 * serán válidos en cualquier estado. Este método NO debe modificar
-		 * clientStatus.
-		 */
-		boolean commandAllowed = true;
-		switch (currentCommand) {
-		case NFCommands.COM_MYFILES: {
-			commandAllowed = true;
-			break;
-		}
-		default:
-			// System.err.println("ERROR: undefined behaviour for " + currentCommand + "
-			// command!");
-		}
-		return commandAllowed;
-	}
+        boolean commandAllowed = true;
+
+        switch (currentState) {
+
+        case OFFLINE:
+            switch (currentCommand) {
+            case NFCommands.COM_MYFILES:
+            case NFCommands.COM_PING:
+            case NFCommands.COM_QUIT:
+            case NFCommands.COM_NICK:
+                commandAllowed = true;
+                break;
+
+            
+            case NFCommands.COM_FILELIST_DIR:
+            case NFCommands.COM_PEERLIST:
+            case NFCommands.COM_FILELIST_PEER:
+            case NFCommands.COM_DOWNLOAD_PEER:
+            case NFCommands.COM_DOWNLOAD_DIR:
+            case NFCommands.COM_SERVE:
+                
+                commandAllowed = false;
+                if (currentCommand != NFCommands.COM_SERVE) {
+                    System.err.println("* You must ping the directory before using this command");
+                } else {
+                    System.err.println("* You cannot serve files before checking the directory (ping)");
+                }
+                break;
+
+            default:
+                commandAllowed = false;
+                System.err.println("ERROR: undefined behaviour for command " + currentCommand
+                        + " in OFFLINE state");
+            }
+            break;
+
+        case READY:
+            switch (currentCommand) {
+            case NFCommands.COM_MYFILES:
+            case NFCommands.COM_PING:
+            case NFCommands.COM_FILELIST_DIR:
+            case NFCommands.COM_PEERLIST:
+            case NFCommands.COM_FILELIST_PEER:
+            case NFCommands.COM_DOWNLOAD_PEER:
+            case NFCommands.COM_DOWNLOAD_DIR:
+            case NFCommands.COM_SERVE:
+            case NFCommands.COM_QUIT:
+            case NFCommands.COM_NICK:
+                commandAllowed = true;
+                break;
+            default:
+                commandAllowed = false;
+                System.err.println("ERROR: undefined behaviour for command " + currentCommand
+                        + " in READY state");
+            }
+            break;
+
+        case SERVE_OK:
+            switch (currentCommand) {
+            case NFCommands.COM_MYFILES:
+            case NFCommands.COM_PING:
+            case NFCommands.COM_FILELIST_DIR:
+            case NFCommands.COM_PEERLIST:
+            case NFCommands.COM_FILELIST_PEER:
+            case NFCommands.COM_DOWNLOAD_PEER:
+            case NFCommands.COM_DOWNLOAD_DIR:
+            case NFCommands.COM_QUIT:
+                commandAllowed = true;
+                break;
+            case NFCommands.COM_SERVE:
+                commandAllowed = false;
+                System.err.println("* You cannot start the server because it is already running");
+                break;
+            case NFCommands.COM_NICK:
+                commandAllowed = false;
+                System.err.println("* You cannot change nickname while serving files");
+                break;
+            default:
+                commandAllowed = false;
+                System.err.println("ERROR: undefined behaviour for command " + currentCommand
+                        + " in SERVING state");
+            }
+            break;
+
+        default:
+            commandAllowed = false;
+            System.err.println("ERROR: invalid client state " + currentState);
+        }
+
+        return commandAllowed;
+    }
 
 	private void updateCurrentState(boolean success) {
 		/*
@@ -234,7 +306,17 @@ public class NFController {
 			return;
 		}
 		switch (currentCommand) {
-		default:
+			case NFCommands.COM_PING:
+				if (currentState == OFFLINE) currentState = READY;
+				break;
+			case NFCommands.COM_SERVE:
+				if (currentState == READY) currentState = SERVE_OK;
+				break;
+			case NFCommands.COM_QUIT:
+				if (currentState == SERVE_OK || currentState == READY) currentState = OFFLINE;
+				break;
+			default:
+				break;
 		}
 
 	}

@@ -1,6 +1,8 @@
 package es.um.redes.nanoFiles.udp.client;
 
+import java.util.*;
 import java.io.IOException;
+
 import java.net.DatagramPacket;
 import java.net.DatagramSocket;
 import java.net.InetAddress;
@@ -8,8 +10,9 @@ import java.net.InetSocketAddress;
 import java.net.SocketTimeoutException;
 import java.util.Map;
 import java.util.Arrays;
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
-import es.um.redes.nanoFiles.tcp.client.NFConnector;
+import java.util.List;
 
 import es.um.redes.nanoFiles.application.NanoFiles;
 import es.um.redes.nanoFiles.udp.message.DirMessage;
@@ -50,10 +53,6 @@ public class DirectoryConnector {
 	 */
 	private String directoryHostname;
 
-
-
-
-
 	public static class DownloadedFile {
 		public final String filename;
 		public final long filesize;
@@ -82,9 +81,8 @@ public class DirectoryConnector {
 		 * TODO: (Boletín SocketsUDP) Crea el socket UDP en cualquier puerto para enviar
 		 * datagramas al directorio
 		 */
-		
-		socket = new DatagramSocket();
 
+		socket = new DatagramSocket();
 
 	}
 
@@ -133,14 +131,15 @@ public class DirectoryConnector {
 		 * NOTA: Las excepciones deben tratarse de la más concreta a la más genérica.
 		 * SocketTimeoutException es más concreta que IOException.
 		 */
-		DatagramPacket packet = new DatagramPacket(requestData, requestData.length, directoryAddress);
+		//DatagramPacket packet = new DatagramPacket(requestData, requestData.length, directoryAddress);
 		int intento = 0;
 		boolean success = false;
 		while (intento < MAX_NUMBER_OF_ATTEMPTS && !success) {
 			try {
 				socket.setSoTimeout(TIMEOUT);
+				DatagramPacket packet = new DatagramPacket(requestData, requestData.length, directoryAddress);
 				socket.send(packet);
-				System.out.println("Intento " + (intento+1) + ": Datagrama enviado");
+				System.out.println("Intento " + (intento + 1) + ": Datagrama enviado");
 				DatagramPacket responsePacket = new DatagramPacket(responseData, responseData.length);
 				socket.receive(responsePacket);
 				response = Arrays.copyOf(responseData, responsePacket.getLength());
@@ -159,7 +158,7 @@ public class DirectoryConnector {
 				System.exit(-1);
 			}
 		}
-	
+
 		if (response != null && response.length == responseData.length) {
 			System.err.println("Your response is as large as the datagram reception buffer!!\n"
 					+ "You must extract from the buffer only the bytes that belong to the datagram!");
@@ -205,7 +204,6 @@ public class DirectoryConnector {
 	 * @return Verdadero si
 	 */
 	public boolean pingDirectoryRaw() {
-		boolean success = false;
 		/*
 		 * TODO: (Boletín EstructuraNanoFiles) Basándose en el código de
 		 * "testSendAndReceive", contactar con el directorio, enviándole nuestro
@@ -216,14 +214,37 @@ public class DirectoryConnector {
 		 * datagrama con los bytes en que se codifica la cadena : 4.Enviar datagrama y
 		 * recibir una respuesta (sendAndReceiveDatagrams). : 5. Comprobar si la cadena
 		 * recibida en el datagrama de respuesta es "welcome", imprimir si éxito o
-		 * fracaso. 6.Devolver éxito/fracaso de la operación.
+		 * fracaso. 6.Devolver éxito/fracaso de la operación. boolean success = false;
+		 * String mensaje = "ping"; byte[] dataToServer = mensaje.getBytes(); byte[]
+		 * response = sendAndReceiveDatagrams(dataToServer); if (response != null) {
+		 * String respuesta = new String(response); if (respuesta.startsWith("pingok"))
+		 * { success = true; } }
+		 * 
+		 * return success;
 		 */
-
-
+		boolean success = false;
+		String ping = "ping&" + NanoFiles.PROTOCOL_ID;
+		byte[] dataToServer = ping.getBytes();
+		byte[] responseData = sendAndReceiveDatagrams(dataToServer);
+		if (responseData != null) {
+			String response = new String(responseData);
+			if (response.equals("welcome")) {
+				success = true;
+				System.out.println("Directorio alcanzable y funcionando.");
+			} else {
+				System.err.println("Respuesta inesperada por parte del directorio: " + response);
+			}
+		}
 
 		return success;
 	}
 
+	public void close() {
+		if (socket != null && !socket.isClosed()) {
+			socket.close();
+		}
+	}
+	
 	/**
 	 * Método para "hacer ping" al directorio, comprobar que está operativo y que es
 	 * compatible.
@@ -231,7 +252,6 @@ public class DirectoryConnector {
 	 * @return Verdadero si el directorio está operativo y es compatible
 	 */
 	public boolean pingDirectory() {
-		boolean success = false;
 		/*
 		 * TODO: (Boletín MensajesASCII) Hacer ping al directorio 1.Crear el mensaje a
 		 * enviar (objeto DirMessage) con atributos adecuados (operation, etc.) NOTA:
@@ -244,8 +264,34 @@ public class DirectoryConnector {
 		 * de la operación
 		 */
 
-
-
+		/*
+		 * boolean success = false; String ping = "ping&" + NanoFiles.PROTOCOL_ID;
+		 * byte[] dataToServer = ping.getBytes(); byte[] responseData =
+		 * sendAndReceiveDatagrams(dataToServer); if (responseData != null) { String
+		 * response = new String(responseData); if (response.equals("welcome")) {
+		 * success = true; System.out.println("Directorio alcanzable y funcionando."); }
+		 * else { System.err.println("Respuesta inesperada por parte del directorio: " +
+		 * response); } }
+		 * 
+		 * 
+		 * return success;
+		 */
+		boolean success = false;
+		DirMessage message = new DirMessage(DirMessageOps.OPERATION_PING, NanoFiles.PROTOCOL_ID);
+		String messageStr = message.toString();
+		byte[] dataToServer = messageStr.getBytes();
+		byte[] responseData = sendAndReceiveDatagrams(dataToServer);
+		if (responseData != null) {
+			String response = new String(responseData);
+			DirMessage responseMessage = DirMessage.fromString(response);
+			if (DirMessageOps.OPERATION_PING.equals(responseMessage.getOperation())
+					&& NanoFiles.PROTOCOL_ID.equals(responseMessage.getProtocolId())) {
+				success = true;
+				System.out.println("Directorio alcanzable y compatible ");
+			} else {
+				System.err.println("Respuesta de ping inválida: " + response);
+			}
+		}
 		return success;
 	}
 
@@ -257,14 +303,34 @@ public class DirectoryConnector {
 	 *         y acepta la lista de ficheros, falso en caso contrario.
 	 */
 	public boolean registerFileServer(int serverPort) {
-		boolean success = false;
-
 		// TODO: Ver TODOs en pingDirectory y seguir esquema similar
+		boolean success = false;
+		DirMessage request = new DirMessage(
+			    DirMessageOps.OPERATION_REGISTER_SERVER,
+			    NanoFiles.PROTOCOL_ID,
+			    NanoFiles.peerNickname,
+			    serverPort
+			);
 
 
+		byte[] dataToServer = request.toString().getBytes();
+		byte[] responseData = sendAndReceiveDatagrams(dataToServer);
+		if (responseData != null) {
+			String responseStr = new String(responseData);
+			DirMessage responseMessage = DirMessage.fromString(responseStr);
+			if (DirMessageOps.OPERATION_REGISTER_SERVER.equals(responseMessage.getOperation())
+					&& NanoFiles.PROTOCOL_ID.equals(responseMessage.getProtocolId())) {
+				success = true;
+				System.out.println("Registrado como servidor: " + NanoFiles.peerNickname);
+			} else {
+				System.err.println("No se ha podido registrar como servidor");
+			}
+		}
 
 		return success;
 	}
+	
+	
 
 	/**
 	 * Método para obtener la lista de ficheros alojados en el directorio. Para cada
@@ -275,38 +341,131 @@ public class DirectoryConnector {
 	 */
 	public FileInfo[] getFileList() {
 		FileInfo[] filelist = new FileInfo[0];
-		// TODO: Ver TODOs en pingDirectory y seguir esquema similar
-
-
-
+		DirMessage request = new DirMessage(DirMessageOps.OPERATION_GET_FILES, NanoFiles.PROTOCOL_ID);
+		byte[] dataToServer = request.toString().getBytes();
+		byte[] responseData = sendAndReceiveDatagrams(dataToServer);
+		if (responseData != null) {
+			String responseStr = new String(responseData);
+			/*
+			System.out.println("===DEBUG===");
+			System.out.println("Bytes recibidos: " + responseData.length);
+			System.out.println("responseStr.length(): " + responseStr.length());
+			System.out.println("responseStr: [" + responseStr.replace("\n", "\\n") + "]");
+			System.out.println("====================");
+*/
+			DirMessage responseMessage = DirMessage.fromString(responseStr);
+			if (DirMessageOps.OPERATION_GET_FILES.equals(responseMessage.getOperation())
+					&& NanoFiles.PROTOCOL_ID.equals(responseMessage.getProtocolId())) {
+				String fileStr = responseMessage.getFiles();
+				/*
+				System.out.println("=== DEBUG FILESTR ===");
+				System.out.println("fileStr.length(): " + fileStr.length());
+				System.out.println("fileStr: [" + fileStr.replace("\n", "\\n") + "]");
+				System.out.println("====================");
+				*/
+				if (fileStr != null && !fileStr.isEmpty()) {
+					filelist = parseFileList(fileStr);
+					System.out.println("Ficheros que se reciben del directorio (" + filelist.length + ")");
+				}
+			} else {
+				System.err.println("Respuesta inválida de dirfiles");
+			}
+		}
 		return filelist;
 	}
 
+	private FileInfo[] parseFileList(String fileStr) {
+	    if (fileStr == null || fileStr.trim().isEmpty()) {
+	        return new FileInfo[0];
+	    }
+	    
+	    String[] lines = fileStr.split("\n");
+	    List<FileInfo> files = new ArrayList<>();
+	    
+	    for (String line : lines) {
+	        line = line.trim();
+	        if (line.isEmpty()) continue;
+	        
+	        String[] parts = line.trim().split("\\s+");
+	        if (parts.length >= 3 && parts[parts.length - 1].matches("[0-9a-f]{40}")) {
+	            String hash = parts[parts.length - 1];
+	            String name = parts[0];
+	            try {
+	                long size = Long.parseLong(parts[parts.length - 2]);
+	                files.add(new FileInfo(hash, name, size, null));
+	                System.out.printf("Parseado: %s (%d bytes, hash %s)\n", name, size, hash);
+	            } catch (NumberFormatException e) {
+	                System.err.println("Error parseando tamaño: " + line);
+	            }
+	        }
+	    }
+	    return files.toArray(new FileInfo[0]);
+	}
+
+
+
+
 	public Map<String, InetSocketAddress> getPeerList() {
 		Map<String, InetSocketAddress> peers = new LinkedHashMap<String, InetSocketAddress>();
-
-
-
+		DirMessage request = new DirMessage(DirMessageOps.OPERATION_GET_PEERS, NanoFiles.PROTOCOL_ID);
+		byte[] dataToServer = request.toString().getBytes();
+		byte[] responseData = sendAndReceiveDatagrams(dataToServer);
+		if (responseData != null) {
+			String responseStr = new String(responseData);
+			DirMessage responseMessage = DirMessage.fromString(responseStr);
+			if (DirMessageOps.OPERATION_GET_PEERS.equals(responseMessage.getOperation()) && NanoFiles.PROTOCOL_ID.equals(responseMessage.getProtocolId())) {
+				String peersStr = responseMessage.getPeers();
+				if (peersStr != null && !peersStr.trim().isEmpty()) {
+					parsePeerList(peersStr, peers);
+				}
+			}
+		}
 		return peers;
+	}
+	
+	private void parsePeerList(String peersStr, Map<String, InetSocketAddress> peers) {
+		String[] lineas = peersStr.split("\n");
+		for (String line : lineas) {
+			if (line.trim().isEmpty()) continue;
+			try {
+				String[] partes = line.split(":");
+				if (partes.length == 3) {
+					String nick = partes[0];
+					String ip = partes[1];
+					int port = Integer.parseInt(partes[2]);
+					InetAddress address = InetAddress.getByName(ip);
+					peers.put(nick, new InetSocketAddress(address, port));
+				}
+			} catch (Exception e) {
+				System.err.println("Error al parsear el peer.");
+			}
+		}
 	}
 
 	public Map<String, InetSocketAddress[]> searchFilesByHash(String hashSubstring) {
 		Map<String, InetSocketAddress[]> results = new LinkedHashMap<String, InetSocketAddress[]>();
 
-
-
 		return results;
 	}
 
 	public DownloadedFile downloadFileFromDirectory(String hashSubstring) {
-		byte[] fileData = null;
-		String filename = null;
-		long filesize = -1;
-		String filehash = null;
-
-
-
-		return new DownloadedFile(filename, filesize, fileData, filehash);
+		DirMessage request = new DirMessage(DirMessageOps.OPERATION_DOWNLOAD_DIR, NanoFiles.PROTOCOL_ID, hashSubstring);
+		byte[] dataToServer = request.toString().getBytes();
+		byte[] responseData = sendAndReceiveDatagrams(dataToServer);
+		if (responseData == null) {
+			return null;
+		}
+		DirMessage response = DirMessage.fromString(new String(responseData));
+		if (!DirMessageOps.OPERATION_DOWNLOAD_DIR.equals(response.getOperation())) {
+			return null;
+		}
+		
+		if (response.getFiledata() == null) {
+			System.err.println("* Directory error: " + response.getFilename());
+			return null;
+		}
+		byte[] data = Base64.getDecoder().decode(response.getFiledata());
+		return new DownloadedFile(response.getFilename(), response.getFilesize(), data, response.getFilehash());
 	}
 
 	/**
@@ -316,16 +475,24 @@ public class DirectoryConnector {
 	 *         y ha dado de baja sus ficheros.
 	 */
 	public boolean unregisterFileServer() {
-		boolean success = false;
-
-
-
-
-		return success;
+	    boolean success = false;
+	    DirMessage request = new DirMessage(DirMessageOps.OPERATION_UNREGISTER_SERVER, NanoFiles.PROTOCOL_ID);
+	    request.setNickname(NanoFiles.peerNickname);
+	    
+	    byte[] dataToServer = request.toString().getBytes();
+	    byte[] responseData = sendAndReceiveDatagrams(dataToServer);
+	    
+	    if (responseData != null) {
+	        String responseStr = new String(responseData);
+	        DirMessage responseMessage = DirMessage.fromString(responseStr);
+	        if (DirMessageOps.OPERATION_UNREGISTER_SERVER.equals(responseMessage.getOperation())
+	            && NanoFiles.PROTOCOL_ID.equals(responseMessage.getProtocolId())) {
+	            success = true;
+	            System.out.println("Dado de baja como servidor: " + NanoFiles.peerNickname);
+	        }
+	    }
+	    return success;
 	}
-
-
-
 
 
 }

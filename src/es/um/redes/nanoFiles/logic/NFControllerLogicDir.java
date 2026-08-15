@@ -1,5 +1,6 @@
 package es.um.redes.nanoFiles.logic;
 
+import java.util.*;
 import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.util.Map;
@@ -98,17 +99,26 @@ public class NFControllerLogicDir {
 	 * Método para obtener y mostrar el censo de pares servidor registrados en el
 	 * directorio
 	 */
+	
 	protected void getAndPrintPeerList() {
-		Map<String, InetSocketAddress> peers = directoryConnector.getPeerList();
-		System.out.println("* Registered peers at " + directoryConnector.getDirectoryHostname());
-		if (peers.isEmpty()) {
-			System.out.println("  (none)");
-			return;
-		}
-		for (Map.Entry<String, InetSocketAddress> entry : peers.entrySet()) {
-			System.out.println("  - " + entry.getKey() + " @ " + entry.getValue());
-		}
+	    System.out.println("* Peers registrados en: " + directoryConnector.getDirectoryHostname());
+	    
+	    Map<String, InetSocketAddress> peerList = directoryConnector.getPeerList();
+	    
+	    if (peerList.isEmpty()) {
+	        System.out.println("  (none)\n");
+	    } else {
+	        System.out.printf("%-12s %s\n", "Nickname", "Address");
+	        System.out.println("-----------------------------------------");
+	        for (Map.Entry<String, InetSocketAddress> peer : peerList.entrySet()) {
+	            String addr = peer.getValue().getAddress().getHostAddress() + ":" + 
+	                         peer.getValue().getPort();
+	            System.out.printf("%-12s %s\n", peer.getKey(), addr);
+	        }
+	        System.out.println();
+	    }
 	}
+
 
 	/**
 	 * Método para obtener el listado de pares servidor registrados en el directorio
@@ -162,7 +172,7 @@ public class NFControllerLogicDir {
 			java.nio.file.Files.write(dest, dl.data);
 			String checksum = es.um.redes.nanoFiles.util.FileDigest.computeFileChecksumString(dest.toString());
 			System.out.println("* Downloaded directory file to " + dest + " (" + dl.data.length + " bytes)");
-			System.out.println("* SHA-256: " + checksum);
+			System.out.println("* Hash: " + checksum);
 			return true;
 		} catch (java.io.IOException e) {
 			System.err.println("* Failed to write downloaded file: " + e.getMessage());

@@ -1,0 +1,37 @@
+private FileInfo[] parseFileList(String fileStr) {
+	    
+	    1. Devuelve un array vacío si no hay datos (null)
+	    
+	    if (fileStr == null || fileStr.trim().isEmpty()) {
+	        return new FileInfo[0];
+	    }
+	    
+	    Entrada: "prueba1...\nprueba2..."
+	    Salida: ["prueba1...",,"prueba2..."]
+	    
+	    String[] lines = fileStr.split("\n");  
+	    List<FileInfo> files = new ArrayList<>();
+	    
+	    
+
+	    for (String line : lines) {
+	        if (line.trim().isEmpty()) continue; // salta líneas vacías
+	        
+	        if (line.length() < 40) continue; // formato inválido (mirar clase FileInfo)
+
+	        try {
+	        // Extraer campos de acuerdo a clase FileInfo
+	            String name = line.substring(0, 30).trim();
+	            String sizeStr = line.substring(30, 40).trim();
+	            String hash = line.substring(40).trim();
+
+	            long size = Long.parseLong(sizeStr);
+	            files.add(new FileInfo(hash, name, size, null));
+	        } catch (Exception e) {
+	        }
+	    }
+	    
+	    return files.toArray(new FileInfo[0]);
+	}
+
+

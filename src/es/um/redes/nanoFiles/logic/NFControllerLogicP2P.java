@@ -1,18 +1,25 @@
 package es.um.redes.nanoFiles.logic;
 
+import java.nio.file.*;
+
+import java.util.Map;
+
 import java.net.InetSocketAddress;
 import java.io.IOException;
 import es.um.redes.nanoFiles.tcp.client.NFConnector;
+import es.um.redes.nanoFiles.tcp.message.PeerMessage;
+import es.um.redes.nanoFiles.tcp.message.PeerMessageOps;
 import es.um.redes.nanoFiles.application.NanoFiles;
+import es.um.redes.nanoFiles.util.*;
 
 
 
 import es.um.redes.nanoFiles.tcp.server.NFServer;
+import es.um.redes.nanoFiles.util.FileInfo;
 
 public class NFControllerLogicP2P {
 	// Servidor TCP local para compartir ficheros con otros peers
 	private NFServer fileServer = null;
-
 
 
 	protected NFControllerLogicP2P() {
@@ -27,32 +34,25 @@ public class NFControllerLogicP2P {
 	 * 
 	 */
 	protected boolean startFileServer() {
-		boolean serverRunning = false;
-		/*
-		 * Comprobar que no existe ya un objeto NFServer previamente creado, en cuyo
-		 * caso el servidor ya está en marcha.
-		 */
-		if (fileServer != null) {
-			System.err.println("File server is already running");
-		} else {
-			/*
-			 * TODO: (Boletín Servidor TCP concurrente) Arrancar servidor en segundo plano
-			 * creando un nuevo hilo, comprobar que el servidor está escuchando en un puerto
-			 * válido (>0), imprimir mensaje informando sobre el puerto de escucha, y
-			 * devolver verdadero. Las excepciones que puedan lanzarse deben ser capturadas
-			 * y tratadas en este método. Si se produce una excepción de entrada/salida
-			 * (error del que no es posible recuperarse), se debe informar sin abortar el
-			 * programa
-			 * 
-			 */
+	    if (fileServer != null) {
+	        System.out.println("File server is already running");
+	        return true;
+	    }
 
-
-
-
-		}
-		return serverRunning;
-
+	   try {
+		   fileServer = new NFServer();
+		   Thread serverThread = new Thread(fileServer);
+		   serverThread.setDaemon(true); // se para cuando la aplicación termina
+		   serverThread.start();
+		   System.out.println("Servidor corriendo en el puerto %d%n" + fileServer.getPort());
+		   return true;
+	   } catch (IOException e) {
+		   System.err.println("No se puede crear un NFServer" + e.getMessage());
+		   fileServer = null;
+		   return false;
+	   }
 	}
+	
 
 	protected void testTCPServer() {
 		assert (NanoFiles.testModeTCP);
@@ -73,6 +73,7 @@ public class NFControllerLogicP2P {
 			 * introducidos mediante el shell.
 			 */
 			fileServer.test();
+			
 			// Este código es inalcanzable: el método 'test' nunca retorna...
 		} catch (IOException e1) {
 			e1.printStackTrace();
@@ -112,8 +113,18 @@ public class NFControllerLogicP2P {
 	 */
 	protected boolean listPeerFiles(InetSocketAddress peerAddr) {
 		boolean success = false;
-
-
+		try {
+			NFConnector connector = new NFConnector(peerAddr);
+			FileInfo[] files = connector.getFileList();
+			connector.close();
+			if (files != null) {
+				System.out.println("Ficheros disponibles en: " + peerAddr);
+				FileInfo.printToSysout(files);
+				success = true;
+			} 
+		} catch (IOException e) {
+			System.err.println("Error al conectar con el peer: " + e.getMessage());
+		}
 
 		return success;
 	}
@@ -127,11 +138,18 @@ public class NFControllerLogicP2P {
 			String targetHashSubstring) {
 		// TODO: localizar peers con el hash solicitado (o uno concreto) y delegar en
 		// downloadFileFromServers
-		boolean success = false;
-
-
-
-		return success;
+		//boolean success = false;
+		Map<String, InetSocketAddress> peers = dirLogic.fetchPeerList();
+		if (peers == null || peers.isEmpty()) {
+			System.err.println("No hay peers registrados en el directorio.");
+			return false;
+		}
+		InetSocketAddress peerAddr = peers.get(targetPeerNickname);
+		if (peerAddr == null) {
+			System.err.println("Peer " + targetPeerNickname + " no encontrado.");
+			return false;
+		}
+		return downloadFileFromServers(new InetSocketAddress[] {peerAddr}, targetHashSubstring);
 	}
 
 	/**
@@ -152,7 +170,31 @@ public class NFControllerLogicP2P {
 		// pedido, obtener nombre remoto, reservar nombre local sin colisiones, alternar
 		// descarga de chunks y verificar hash final. Cerrar los sockets al terminar.
 
-
+		try {
+			NFConnector connector = new NFConnector(serverAddressList[0]);
+			PeerMessage response = connector.downloadFile(targetHashSubstring);
+			connector.close();
+			
+			if (response.getOpcode() == PeerMessageOps.OPCODE_ERROR) {
+				System.err.println("Error Servidor: " + response.getMensajeError());
+				downloaded = false;
+			}
+			if (response.getOpcode() == PeerMessageOps.OPCODE_FILE_DATA) {
+				Path destino = FileNameUtil.chooseAvailableName(response.getFileName());
+				Files.write(destino, response.getData());
+				String checksum = FileDigest.computeFileChecksumString(destino.toString());
+				System.out.println("Descargando: " + destino + " (" + response.getData().length + " bytes )");
+				System.out.println("HASH: " + checksum);
+				if (checksum.equals(response.getFileHash())) {
+					System.out.println("Comprobación Hash: OK");
+				} else {
+					System.err.println("Comprobación Hash: FAILED");
+				}
+				downloaded = true;
+			}
+		} catch (IOException e) {
+			System.err.println("Error al descargar del peer: " + e.getMessage());
+		}
 
 
 		return downloaded;
@@ -163,15 +205,11 @@ public class NFControllerLogicP2P {
 	 * 
 	 * @return El puerto en el que escucha el servidor, o 0 en caso de error.
 	 */
+	
+
+	// NFControllerLogicP2P.java
 	protected int getServerPort() {
-		int port = 0;
-		/*
-		 * TODO: Devolver el puerto de escucha de nuestro servidor de ficheros
-		 */
-
-
-
-		return port;
+	    return fileServer != null ? fileServer.getPort() : 0;  // Puerto REAL del servidor
 	}
 
 	/**
@@ -182,17 +220,16 @@ public class NFControllerLogicP2P {
 		/*
 		 * TODO: Enviar señal para detener nuestro servidor de ficheros en segundo plano
 		 */
-
+		if (fileServer != null) {
+			fileServer.stopServer();
+			fileServer = null;
+		}
 
 
 	}
 
 	protected boolean serving() {
-		boolean result = false;
-
-
-
-		return result;
+		return fileServer != null && fileServer.getPort() > 0;
 
 	}
 

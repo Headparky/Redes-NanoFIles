@@ -1,5 +1,6 @@
 package es.um.redes.nanoFiles.udp.server;
 
+import java.nio.file.*;
 import java.io.File;
 import java.io.IOException;
 import java.net.DatagramPacket;
@@ -7,12 +8,13 @@ import java.net.DatagramSocket;
 import java.net.InetSocketAddress;
 import java.net.SocketException;
 import java.util.LinkedHashMap;
+import java.util.Map;
 
 import es.um.redes.nanoFiles.application.NanoFiles;
 import es.um.redes.nanoFiles.udp.message.DirMessage;
 import es.um.redes.nanoFiles.udp.message.DirMessageOps;
 import es.um.redes.nanoFiles.util.FileInfo;
-import es.um.redes.nanoFiles.util.NickGenerator;
+
 
 public class NFDirectoryServer {
 	/**
@@ -97,7 +99,7 @@ public class NFDirectoryServer {
 			 */
 			socket.receive(datagramReceivedFromClient);
 
-
+			
 			if (datagramReceivedFromClient == null) {
 				System.err.println("[testMode] NFDirectoryServer.receiveDatagram: code not yet fully functional.\n"
 						+ "Check that all TODOs have been correctly addressed!");
@@ -148,22 +150,6 @@ public class NFDirectoryServer {
 		 * cadena "pingok". Si el mensaje recibido no es "ping", se informa del error y
 		 * se envía "invalid" como respuesta.
 		 */
-		if (messageFromClient.startsWith("ping")) {
-			String messageToClient = new String("pingok");
-			byte[] dataToClient = messageToClient.getBytes();
-			InetSocketAddress clientAddress = (InetSocketAddress) pkt.getSocketAddress();
-			DatagramPacket packetToClient = new DatagramPacket(dataToClient, dataToClient.length, clientAddress);
-			System.out.println("Enviando respuesta: pingok");
-			socket.send(packetToClient);
-		} else {
-			String messageError = new String("invalid");
-			System.err.println("El mensaje recibido no es la palabra ping: " + messageFromClient);
-			byte[] dataToClient = messageError.getBytes();
-			InetSocketAddress clientAddress = (InetSocketAddress) pkt.getSocketAddress();
-			DatagramPacket packetToClient = new DatagramPacket(dataToClient, dataToClient.length, clientAddress);
-			System.out.println("Enviando respuesta de error: invalid");
-			socket.send(packetToClient);
-		}
 		/*
 		 * TODO: (Boletín Estructura-NanoFiles) Ampliar el código para que, en el caso
 		 * de que la cadena recibida no sea exactamente "ping", comprobar si comienza
@@ -173,6 +159,27 @@ public class NFDirectoryServer {
 		 * recibida y comprobar que su valor coincide con el de NanoFiles.PROTOCOL_ID,
 		 * en cuyo caso se responderá con "welcome" (en otro caso, "denied").
 		 */
+
+		String response;
+		if (messageFromClient.equals("ping")) {
+			response = "pingok";
+		} else if (messageFromClient.startsWith("ping&")) {
+			String protocolID = messageFromClient.substring(messageFromClient.indexOf('&') + 1);
+			if (protocolID.equals(NanoFiles.PROTOCOL_ID)) {
+				response = "welcome";
+			} else {
+				response = "denied";
+			}
+		} else {
+			System.err.println("Mensaje inválido: " + messageFromClient);
+			response = "invalid";
+		}
+		byte[] dataToClient = response.getBytes();
+		InetSocketAddress clientAddress = (InetSocketAddress) pkt.getSocketAddress();
+		DatagramPacket packetToClient = new DatagramPacket(dataToClient, dataToClient.length, clientAddress);
+		System.out.println("Enviando respuesta: " + response);
+		socket.send(packetToClient);
+		
 	}
 
 	public void run() throws IOException {
@@ -197,16 +204,18 @@ public class NFDirectoryServer {
 		 * métodos "getter" para procesar el mensaje y consultar/modificar el estado del
 		 * servidor.
 		 */
-
-
-
+		String messageFromClient = new String(pkt.getData(), 0, pkt.getLength());
+		System.out.println("Data received (boletín ASCII): " + messageFromClient);
+		DirMessage message = DirMessage.fromString(messageFromClient);
+		String operation = message.getOperation();
+		String protocolID = message.getProtocolId();
 		/*
 		 * TODO: Una vez construido un objeto DirMessage con el contenido del datagrama
 		 * recibido, obtener el tipo de operación solicitada por el mensaje y actuar en
 		 * consecuencia, enviando uno u otro tipo de mensaje en respuesta.
 		 */
-		String operation = DirMessageOps.OPERATION_INVALID; // TODO: Cambiar!
-
+		// String operation = DirMessageOps.OPERATION_INVALID; // TODO: Cambiar!
+		
 		/*
 		 * TODO: (Boletín MensajesASCII) Construir un objeto DirMessage (msgToSend) con
 		 * la respuesta a enviar al cliente, en función del tipo de mensaje recibido,
@@ -215,42 +224,130 @@ public class NFDirectoryServer {
 		 * contendrán los valores adecuados para los diferentes campos del mensaje a
 		 * enviar como respuesta (operation, etc.)
 		 */
-
-
-
-
-
+		DirMessage responseMessage = null;
+		/*
+		 * TODO: (Boletín MensajesASCII) Construimos un mensaje de respuesta que indique
+		 * el éxito/fracaso del ping (compatible, incompatible), y lo devolvemos como
+		 * resultado del método.
+		 */
+		/*
+		 * TODO: (Boletín MensajesASCII) Imprimimos por pantalla el resultado de
+		 * procesar la petición recibida (éxito o fracaso) con los datos relevantes, a
+		 * modo de depuración en el servidor
+		 */
 		switch (operation) {
-		case DirMessageOps.OPERATION_PING: {
-
-
-
-
+			case DirMessageOps.OPERATION_PING: {
+			
 			/*
 			 * TODO: (Boletín MensajesASCII) Comprobamos si el protocolId del mensaje del
 			 * cliente coincide con el nuestro.
 			 */
-			/*
-			 * TODO: (Boletín MensajesASCII) Construimos un mensaje de respuesta que indique
-			 * el éxito/fracaso del ping (compatible, incompatible), y lo devolvemos como
-			 * resultado del método.
-			 */
-			/*
-			 * TODO: (Boletín MensajesASCII) Imprimimos por pantalla el resultado de
-			 * procesar la petición recibida (éxito o fracaso) con los datos relevantes, a
-			 * modo de depuración en el servidor
-			 */
+				if (protocolID.equals(NanoFiles.PROTOCOL_ID)) {
+					System.out.println("Ping compatible cuyo protocolo tiene un ID: " + protocolID);
+					responseMessage = new DirMessage(DirMessageOps.OPERATION_PING, NanoFiles.PROTOCOL_ID);
+				} else {
+					System.out.println("Ping incompatible. CLIENT Protocol: " + protocolID + " - " + "CLIENT Protocol EXPECTED: " + NanoFiles.PROTOCOL_ID);
+					responseMessage = new DirMessage(DirMessageOps.OPERATION_PING, DirMessageOps.PROTOCOL_INCOMPATIBLE);
+				}
+			
+				break;
+			}
+			
+			case DirMessageOps.OPERATION_GET_FILES: {
+			    System.out.println("Procesando dirfiles...");
+			    StringBuilder sb = new StringBuilder();
+			    for (int i = 0; i < directoryFiles.length; i++) {
+			        sb.append(directoryFiles[i].toString());
+			        if (i < directoryFiles.length - 1) {
+			            sb.append("\n");
+			        }
+			    }
+			    responseMessage = new DirMessage(DirMessageOps.OPERATION_GET_FILES, NanoFiles.PROTOCOL_ID);
+			    responseMessage.setFiles(sb.toString());
 
-
-
-			break;
-		}
-
-
-
-		default:
-			System.err.println("Unexpected message operation: \"" + operation + "\"");
-			System.exit(-1);
+			    break;
+			}
+			
+			case DirMessageOps.OPERATION_GET_PEERS: {
+				System.out.println("Procesando peers...");
+				StringBuilder sb = new StringBuilder();
+				for (Map.Entry<String, InetSocketAddress> entry : registeredPeers.entrySet()) {
+					String nick = entry.getKey();
+					InetSocketAddress address = entry.getValue();
+					sb.append(nick).append(":").append(address.getAddress().getHostAddress()).append(":").append(address.getPort()).append("\n");
+				}
+				responseMessage = new DirMessage(DirMessageOps.OPERATION_GET_PEERS, NanoFiles.PROTOCOL_ID);
+				responseMessage.setPeers(sb.toString());
+				break;
+			}
+			
+			case DirMessageOps.OPERATION_REGISTER_SERVER: {
+				System.out.println("Procesando server...");
+				String nick = message.getNickname();
+				int port = message.getPort();
+				InetSocketAddress clientAddress = (InetSocketAddress) pkt.getSocketAddress();
+				InetSocketAddress peerAddress = new InetSocketAddress(clientAddress.getAddress(), port);
+				registeredPeers.put(nick, peerAddress);
+				System.out.println("Registrado peer: " + nick + "@" + peerAddress.getAddress().getHostAddress() + ":" + peerAddress.getPort());
+				responseMessage = new DirMessage(DirMessageOps.OPERATION_REGISTER_SERVER, NanoFiles.PROTOCOL_ID, nick, port);
+				break;
+			}
+			
+			case DirMessageOps.OPERATION_UNREGISTER_SERVER: {
+			    System.out.println("Procesando quit...");
+			    String nick = message.getNickname();
+			    registeredPeers.remove(nick);
+			    System.out.println("Peer dado de baja: " + nick);
+			    DirMessage resp = new DirMessage(DirMessageOps.OPERATION_UNREGISTER_SERVER, NanoFiles.PROTOCOL_ID);
+			    resp.setNickname(nick);
+			    responseMessage = resp;
+			    break;
+			}
+			
+			case DirMessageOps.OPERATION_GET_PEER_FILES: {
+				System.out.println("Procesando peerfiles...");
+				String nick = message.getNickname();
+				InetSocketAddress addr = registeredPeers.get(nick);
+				responseMessage = new DirMessage(DirMessageOps.OPERATION_GET_PEER_FILES, NanoFiles.PROTOCOL_ID);
+				if (addr != null) {
+					responseMessage.setPeers(nick + ":" + addr.getAddress().getHostAddress() + ":" + addr.getPort());
+				}
+				break;
+			}
+			
+			case DirMessageOps.OPERATION_DOWNLOAD_PEER_FILE: {
+				System.out.println("Procesando peerdl...");
+				String nick = message.getNickname();
+				InetSocketAddress addr = registeredPeers.get(nick);
+				responseMessage = new DirMessage(DirMessageOps.OPERATION_DOWNLOAD_PEER_FILE, NanoFiles.PROTOCOL_ID);
+				if (addr != null) {
+					responseMessage.setPeers(nick + ":" + addr.getAddress().getHostAddress() + ":" + addr.getPort());
+				}
+				break;
+			}
+			
+			case DirMessageOps.OPERATION_DOWNLOAD_DIR: {
+			    System.out.println("Procesando dirdl...");
+			    String hashSub = message.getHash();
+			    FileInfo[] matches = FileInfo.lookupHashSubstring(directoryFiles, hashSub);
+			    if (matches.length == 0) {
+			        responseMessage = new DirMessage(DirMessageOps.OPERATION_DOWNLOAD_DIR, NanoFiles.PROTOCOL_ID);
+			        System.err.println("Fichero no encontrado para la subcadena del hash: " + hashSub);
+			    } else if (matches.length > 1) {
+			        responseMessage = new DirMessage(DirMessageOps.OPERATION_DOWNLOAD_DIR, NanoFiles.PROTOCOL_ID);
+			        System.err.println("Subcadena del hash ambigua (mas de 1 fichero coincidente): " + hashSub);
+			    } else {
+			        FileInfo fi = matches[0];
+			        byte[] data = Files.readAllBytes(Paths.get(fi.filePath));
+			        responseMessage = new DirMessage(DirMessageOps.OPERATION_DOWNLOAD_DIR,
+			            NanoFiles.PROTOCOL_ID, fi.fileName, fi.fileSize, fi.fileHash, data);
+			    }
+			    break;
+			}
+			
+			default:
+				System.err.println("Unexpected message operation: \"" + operation + "\"");
+				System.exit(-1);
 		}
 
 		/*
@@ -258,12 +355,11 @@ public class NFDirectoryServer {
 		 * (msgToSend) con el mensaje de respuesta a enviar, extraer los bytes en que se
 		 * codifica el string y finalmente enviarlos en un datagrama
 		 */
-
-
-
+		String str = responseMessage.toString();
+		byte[] dataStr = str.getBytes();
+		InetSocketAddress address = (InetSocketAddress) pkt.getSocketAddress();
+		DatagramPacket dataPkt = new DatagramPacket(dataStr, dataStr.length, address);
+		System.out.println("Enviando respuesta : " + str);
+		socket.send(dataPkt);
 	}
-
-
-
-
 }

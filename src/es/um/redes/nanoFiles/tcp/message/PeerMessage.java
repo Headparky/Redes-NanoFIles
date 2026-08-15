@@ -18,7 +18,22 @@ public class PeerMessage {
 	 * específicos para crear mensajes con otros campos, según sea necesario
 	 * 
 	 */
-
+	
+	private String fileName; // Nombre del fichero: FILE_DATA - LIST_RESPONSE
+	
+	private long fileSize; // Tamaño del fichero: FILE_DATA - LIST_RESPONSE
+	
+	private String fileHash; // Hash: FILE_DATA - LIST_RESPONSE
+	
+	private String subcadenaFileHash; // Subcadena del hash: GET_FILE
+	
+	private byte[] data; // Contenido del fichero / chunk: FILE_DATA
+	
+	private int numFiles; // Número de ficheros: LIST_RESPONSE
+	
+	private FileInfo[] fileList;
+	
+	private String mensajeError; // Mensaje de error: ERROR
 
 
 
@@ -30,6 +45,7 @@ public class PeerMessage {
 		opcode = op;
 	}
 
+
 	/*
 	 * TODO: (Boletín MensajesBinarios) Crear métodos getter y setter para obtener
 	 * los valores de los atributos de un mensaje. Se aconseja incluir código que
@@ -40,10 +56,78 @@ public class PeerMessage {
 		return opcode;
 	}
 
+	
+	
+	public String getFileName() {
+		return fileName;
+	}
 
+	public long getFileSize() {
+		return fileSize;
+	}
 
+	public String getFileHash() {
+		return fileHash;
+	}
 
+	public byte[] getData() {
+		return data;
+	}
 
+	public int getNumFiles() {
+		return numFiles;
+	}
+
+	public FileInfo[] getFileList() {
+		return fileList;
+	}
+
+	public String getMensajeError() {
+		return mensajeError;
+	}
+
+	public String getSubcadenaFileHash() {
+		
+		return subcadenaFileHash;
+	}
+	
+	// LIST_REQUEST: solo opcode
+	// preguntar porp qué es mejor que lleve el static
+	public static PeerMessage listRequest() {
+		return new PeerMessage(PeerMessageOps.OPCODE_FILELIST_REQUEST);
+	}
+	
+	// preguntar por qué es mejor que lleve el static
+	public PeerMessage getFile(String hash) {
+		PeerMessage msg = new PeerMessage(PeerMessageOps.OPCODE_GET_FILE);
+		msg.subcadenaFileHash = hash;
+		return msg;
+	}
+	
+	public PeerMessage fileData(String fileName, long size, String hash, byte[] data) {
+		PeerMessage msg = new PeerMessage(PeerMessageOps.OPCODE_FILE_DATA);
+		msg.fileName = fileName;
+		msg.fileSize = size;
+		msg.fileHash = hash;
+		msg.data = data;
+		return msg;
+	}
+
+	public PeerMessage listReponse(FileInfo[] files) {
+		PeerMessage msg = new PeerMessage(PeerMessageOps.OPCODE_FILELIST_RESPONSE);
+		msg.numFiles = files.length;
+		msg.fileList = files;
+		return msg;
+	}
+
+	public PeerMessage error(String error) {
+		PeerMessage msg = new PeerMessage(PeerMessageOps.OPCODE_ERROR);
+		msg.mensajeError = error;
+		return msg;
+	}
+	
+	
+	
 	/**
 	 * Método de clase para parsear los campos de un mensaje y construir el objeto
 	 * DirMessage que contiene los datos del mensaje recibido
@@ -63,14 +147,39 @@ public class PeerMessage {
 		 * entero, etc.
 		 */
 		PeerMessage message = new PeerMessage();
-		byte opcode = dis.readByte();
-		switch (opcode) {
-
-
+		message.opcode = dis.readByte();
+		switch (message.opcode) {
+		case PeerMessageOps.OPCODE_FILELIST_REQUEST:
+			// Solo opcode
+			break;
+		case PeerMessageOps.OPCODE_FILELIST_RESPONSE:
+			message.numFiles = dis.readInt();
+			message.fileList = new FileInfo[message.numFiles];
+			for (int i=0; i<message.numFiles; i++) {
+				String name = dis.readUTF();
+				long size = dis.readLong();
+				String hash = dis.readUTF();
+				message.fileList[i] = new FileInfo(hash, name, size, null);
+			}
+			break;
+		case PeerMessageOps.OPCODE_GET_FILE:
+			message.subcadenaFileHash = dis.readUTF();
+			break;
+		case PeerMessageOps.OPCODE_FILE_DATA:
+			message.fileName = dis.readUTF();
+			message.fileSize = dis.readLong();
+			message.fileHash = dis.readUTF();
+			int len = dis.readInt();
+			message.data = new byte[len];
+			dis.readFully(message.data);
+			break;
+		case PeerMessageOps.OPCODE_ERROR:
+			message.mensajeError = dis.readUTF();
+			break;
 
 		default:
 			System.err.println("PeerMessage.readMessageFromInputStream doesn't know how to parse this message opcode: "
-					+ PeerMessageOps.opcodeToOperation(opcode));
+					+ PeerMessageOps.opcodeToOperation(message.opcode));
 			System.exit(-1);
 		}
 		return message;
@@ -87,9 +196,30 @@ public class PeerMessage {
 
 		dos.writeByte(opcode);
 		switch (opcode) {
-
-
-
+			case PeerMessageOps.OPCODE_FILELIST_REQUEST:
+				// Solo opcode (nada más)
+				break;
+			case PeerMessageOps.OPCODE_FILELIST_RESPONSE:
+				dos.writeInt(numFiles);
+				for (FileInfo fi : fileList) {
+					dos.writeUTF(fi.fileName);
+					dos.writeLong(fi.fileSize);
+					dos.writeUTF(fi.fileHash);
+				}
+				break;
+			case PeerMessageOps.OPCODE_GET_FILE:
+				dos.writeUTF(subcadenaFileHash);
+				break;
+			case PeerMessageOps.OPCODE_FILE_DATA:
+				dos.writeUTF(fileName);
+				dos.writeLong(fileSize);
+				dos.writeUTF(fileHash);
+				dos.writeInt(data.length);
+				dos.write(data);
+				break;
+			case PeerMessageOps.OPCODE_ERROR:
+				dos.writeUTF(mensajeError);
+				break;
 
 		default:
 			System.err.println("PeerMessage.writeMessageToOutputStream found unexpected message opcode " + opcode + "("

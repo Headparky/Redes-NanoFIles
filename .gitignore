@@ -1,0 +1,6 @@
+# Archivos compilados de Java
+bin/
+*.class
+
+# Archivos temporales de Eclipse
+.settings/
